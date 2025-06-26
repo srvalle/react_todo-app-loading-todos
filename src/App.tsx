@@ -1,7 +1,7 @@
 /* eslint-disable jsx-a11y/label-has-associated-control */
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import React, { useEffect, useState, useMemo } from 'react';
-import { useRef, createRef } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createRef, useRef } from 'react';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { UserWarning } from './UserWarning';
 import { USER_ID, getTodos } from './api/todos';
@@ -12,22 +12,11 @@ type FilterStatus = 'all' | 'active' | 'completed';
 
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [visibleTodos, setVisibleTodos] = useState<Todo[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [filterBy, setFilterBy] = useState<FilterStatus>('all');
-  const [isLoading, setIsLoading] = useState(true);
 
-  // cria referencia para o input de criação de nova todo
-  // e para cada todo da lista em TransitionGroup. Refs evita mensagem de erro no console
-  // new Map() cria um objeto Map que armazena pares chave/valor, por enquanto vazio
   const newTodoFieldRef = useRef<HTMLInputElement>(null);
-  const nodeRefs = useRef(new Map());
-
-  useEffect(() => {
-    // Verifica se a Ref foi anexada ao elemento (não é null) e aplica o focus
-    if (newTodoFieldRef.current) {
-      newTodoFieldRef.current.focus();
-    }
-  }, []);
 
   useEffect(() => {
     getTodos()
@@ -36,48 +25,54 @@ export const App: React.FC = () => {
       })
       .catch(() => {
         setErrorMessage('Unable to load todos');
-      })
-      .finally(() => {
-        setIsLoading(false);
       });
   }, []);
 
-  // limpa mensagem de erro, se existir
   useEffect(() => {
-    if (errorMessage) {
-      const timerId = setTimeout(() => {
-        setErrorMessage('');
-      }, 3000);
-
-      return () => clearTimeout(timerId);
-    }
-
-    return undefined;
-  }, [errorMessage]);
-
-  // filtra por active, completed, all (default)
-  const visibleTodos = useMemo(() => {
-    return todos.filter(todo => {
-      switch (filterBy) {
-        case 'active':
-          return !todo.completed;
-        case 'completed':
-          return todo.completed;
-        default:
-          return true;
+    const filterTodos = todos.filter(todo => {
+      if (filterBy === 'active') {
+        return !todo.completed;
+      } else if (filterBy === 'completed') {
+        return todo.completed;
+      } else {
+        return true;
       }
     });
+
+    setVisibleTodos(filterTodos);
   }, [todos, filterBy]);
 
-  const activeTodosCount = useMemo(() => {
-    return todos.filter(todo => !todo.completed).length;
-  }, [todos]);
+  useEffect(() => {
+    if (newTodoFieldRef.current) {
+      newTodoFieldRef.current.focus();
+    }
+  }, []);
 
-  const allTodosCompleted = useMemo(() => {
-    return todos.length > 0 && todos.every(todo => todo.completed);
-  }, [todos]);
+  useEffect(() => {
+    if (!errorMessage) {
+      return;
+    }
 
-  const handleToggleTodo = (todoId: number) => {
+    const timerId = setTimeout(() => {
+      setErrorMessage('');
+    }, 3000);
+
+    return () => clearTimeout(timerId);
+  }, [errorMessage]);
+
+  const activeTodosCount = () => {
+    const filterActives = todos.filter(todo => !todo.completed);
+
+    return filterActives.length;
+  };
+
+  const allTodosCompleted = () => {
+    const everyCompleted = todos.every(todo => todo.completed);
+
+    return everyCompleted; // true / false
+  };
+
+  const onToggleTodo = (todoId: number) => {
     setTodos(currentTodos =>
       currentTodos.map(todo =>
         todo.id === todoId ? { ...todo, completed: !todo.completed } : todo,
@@ -85,7 +80,7 @@ export const App: React.FC = () => {
     );
   };
 
-  const handleFilterChange = (status: FilterStatus) => {
+  const onClickFilterChange = (status: FilterStatus) => {
     setFilterBy(status);
   };
 
@@ -102,7 +97,7 @@ export const App: React.FC = () => {
           {/* this button should have `active` class only if all todos are completed */}
           <button
             type="button"
-            className={`todoapp__toggle-all ${allTodosCompleted ? 'active' : ''}`}
+            className={`todoapp__toggle-all ${allTodosCompleted() ? 'active' : ''}`}
             data-cy="ToggleAllButton"
           />
 
@@ -119,25 +114,9 @@ export const App: React.FC = () => {
         </header>
 
         <section className="todoapp__main" data-cy="TodoList">
-          {isLoading && (
-            <div className="todoapp__main__loading">
-              <span className="todoapp__main__loading-spinner loader"></span>
-              <p className="todoapp__main__loading-text">Loading todos...</p>
-            </div>
-          )}
           <TransitionGroup>
             {visibleTodos.map(todo => {
-              // Se o todo.id ainda não existe no Map, cria uma nova ref e adiciona
-              // Se já existe, reutiliza a ref existente
-              if (!nodeRefs.current.has(todo.id)) {
-                nodeRefs.current.set(todo.id, createRef<HTMLDivElement>());
-              }
-
-              // Pega a ref correspondente ao todo.id
-              // o ! no final indica que a ref já existe com certeza,
-              // porque foi criada no passo anterior se nao existia
-              // O ! é o non-null assertion operator do TypeScript
-              const nodeRef = nodeRefs.current.get(todo.id)!;
+              const nodeRef = createRef<HTMLDivElement>();
 
               return (
                 <CSSTransition
@@ -147,7 +126,7 @@ export const App: React.FC = () => {
                   classNames="item"
                 >
                   <div ref={nodeRef}>
-                    <TodoItem todo={todo} onToggle={handleToggleTodo} />
+                    <TodoItem todo={todo} onToggle={onToggleTodo} />
                   </div>
                 </CSSTransition>
               );
@@ -159,7 +138,7 @@ export const App: React.FC = () => {
         {todos.length > 0 && (
           <footer className="todoapp__footer" data-cy="Footer">
             <span className="todo-count" data-cy="TodosCounter">
-              {`${activeTodosCount} item${activeTodosCount !== 1 ? 's' : ''} left`}
+              {`${activeTodosCount()} items left`}
             </span>
 
             {/* Active link should have the 'selected' class */}
@@ -170,7 +149,7 @@ export const App: React.FC = () => {
                 data-cy="FilterLinkAll"
                 onClick={e => {
                   e.preventDefault();
-                  handleFilterChange('all');
+                  onClickFilterChange('all');
                 }}
               >
                 All
@@ -182,7 +161,7 @@ export const App: React.FC = () => {
                 data-cy="FilterLinkActive"
                 onClick={e => {
                   e.preventDefault();
-                  handleFilterChange('active');
+                  onClickFilterChange('active');
                 }}
               >
                 Active
@@ -194,7 +173,7 @@ export const App: React.FC = () => {
                 data-cy="FilterLinkCompleted"
                 onClick={e => {
                   e.preventDefault();
-                  handleFilterChange('completed');
+                  onClickFilterChange('completed');
                 }}
               >
                 Completed

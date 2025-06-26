@@ -9,18 +9,9 @@
   line-height: 1.4em;
   border-bottom: 1px solid #ededed;
 
-  transition: all 0.3s ease-out;
-
-  &:hover {
-    /* background: linear-gradient(180deg, #fff 0%, #fff 50%, #fafafa 100%); */
-    background-color: #fcfcfc;
-  }
-
-  /*
   &:last-child {
     border-bottom: 1px solid #ededed;
   }
-  */
 
   &__status-label {
     cursor: pointer;
